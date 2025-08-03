@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  llm-tutorial:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: llm-inference-tutorial:latest
+    container_name: llm-tutorial
+    hostname: llm-tutorial
+    runtime: nvidia
+    
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
+      - PYTHONPATH=/workspace
+      - HF_HOME=/data/modelpreload/huggingface
+      
+    volumes:
+      # Mount the entire project
+      - ../:/workspace
+      # Mount /scratch for LLM model storage
+      - /scratch:/data/modelpreload
+      # Jupyter notebooks
+      - jupyter-data:/root/.jupyter
+      
+    ports:
+      # Jupyter
+      - "8888:8888"
+      # TensorBoard
+      - "6006:6006"
+      # API server (for later modules)
+      - "8990:8990"
+      # Debugging
+      - "5678:5678"
+      
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+              
+    stdin_open: true
+    tty: true
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import torch; assert torch.cuda.is_available()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      
+volumes:
+  llm-models:
+    driver: local
+  jupyter-data:
+    driver: local
