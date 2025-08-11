@@ -1,0 +1,78 @@
+from copy import copy
+from enum import Enum, auto
+from itertools import count
+from typing import List
+
+from harivllm.sampling_params import SamplingParams
+
+class SequenceStatus(Enum):
+    WAITING = auto()
+    RUNNING = auto()
+    FINISHED = auto()
+
+
+class Sequence:
+    block_size: int = 256
+    counter = count()
+
+    def __init__(self, token_ids: List[int], sampling_params: SamplingParams):
+        self.seq_id = next(Sequence.counter)
+        self.status = SequenceStatus.WAITING
+        self.token_ids = copy(token_ids)
+        # why do we need the last token id of sequence?
+        self.last_token = token_ids[-1]
+        self.num_tokens = len(self.token_ids)
+        self.num_prompt_tokens = len(token_ids)
+        self.num_cached_tokens = 0
+        self.block_table = []
+        self.temperature = sampling_params.temperature
+        self.max_tokens = sampling_params.max_tokens
+        self.ignore_eos = sampling_params.ignore_eos
+        self.sampling_params = sampling_params
+    
+    def __len__(self):
+        return self.num_tokens
+    
+    def __getitem__(self, idx: int):
+        return self.token_ids[idx]
+    
+    @property
+    def prompt_token_ids(self):
+        # why can't i just return self.token_ids?
+        # ok since we are probably going to append generated tokens to the end of the sequence
+        return self.token_ids[:self.num_prompt_tokens]
+    
+    @property
+    def completion_token_ids(self):
+        return self.token_ids[self.num_prompt_tokens:]
+    
+    @property
+    def num_cached_blocks(self):
+        return self.num_cached_tokens // self.block_size
+    
+    @property
+    def num_blocks(self):
+        return (self.num_tokens + self.block_size - 1) // self.block_size
+    
+    @property
+    def last_block_num_tokens(self):
+        return self.num_tokens - (self.num_blocks - 1) * self.block_size
+    
+    def append_token(self, token_id: int):
+        self.token_ids.append(token_id)
+        self.num_tokens += 1
+        self.last_token = token_id
+
+    def __getstate__(self):
+        return (self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.block_table,
+                self.token_ids if self.num_completion_tokens == 0 else self.last_token)
+
+    def __setstate__(self, state):
+        self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.block_table = state[:-1]
+        if self.num_completion_tokens == 0:
+            self.token_ids = state[-1]
+        else:
+            self.last_token = state[-1]
+
+    def __repr__(self):
+        return f"Sequence(seq_id={self.seq_id}, status={self.status}, token_ids={self.token_ids}, last_token={self.last_token}, num_tokens={self.num_tokens}, num_prompt_tokens={self.num_prompt_tokens}, num_cached_tokens={self.num_cached_tokens}, block_table={self.block_table}, temperature={self.temperature}, max_tokens={self.max_tokens}, ignore_eos={self.ignore_eos})"

@@ -21,6 +21,7 @@ run:
 		-v $(shell pwd):/workspace \
 		-v /scratch:/data/modelpreload \
 		--workdir /workspace \
+		-p 8990:8990 \
 		-p 8888:8888 \
 		-p 6006:6006 \
 		-p 5678:5678 \
